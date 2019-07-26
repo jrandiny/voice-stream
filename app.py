@@ -19,20 +19,16 @@ RECORD_SECONDS = 5
 
 print("Opening sound device")
 
-do = False
-if(len(sys.argv)>4):
-  do = True
-
 stream = p.open(format=p.get_format_from_width(WIDTH),
                 channels=CHANNELS,
                 rate=RATE,
-                input=do,
+                input=True,
                 output=True,
                 frames_per_buffer=CHUNK)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 socket_ip = "127.0.0.1"
-socket_port = 5050
+socket_port = 9000
 
 input_thread.start()
 
@@ -46,7 +42,7 @@ while True:
       sock.sendto(data,(socket_ip, socket_port))
       pass
     elif (socket_mode == 2):
-      data,addr = sock.recvfrom(CHUNK)
+      data,addr = sock.recvfrom(CHUNK*4)
       stream.write(data, CHUNK)
       pass
     
