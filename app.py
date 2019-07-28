@@ -7,29 +7,27 @@ import sys
 import command
 import discovery
 
-def start_discovery():
-  network_discover_running.set()
-  listener_thread.start()
+def start_discovery_broadcast():
+  discovery_broadcast_running.set()
   broadcast_thread.start()
 
-def stop_discovery():
-  if(network_discover_running.is_set()):
-    network_discover_running.clear()
-    listener_thread.join()
+def stop_discovery_broadcast():
+  if(discovery_broadcast_running.isSet()):
+    discovery_broadcast_running.clear()
     broadcast_thread.join()
 
 command_queue = Queue()
 connect_queue = Queue()
 
 is_running = threading.Event()
-network_discover_running = threading.Event()
+discovery_broadcast_running = threading.Event()
 
 is_running.set()
-network_discover_running.clear()
+discovery_broadcast_running.clear()
 
 input_thread = threading.Thread(target=command.worker, args=(command_queue, is_running ))
-listener_thread  = threading.Thread(target=discovery.listener, args=(connect_queue, network_discover_running, socket.gethostname()))
-broadcast_thread = threading.Thread(target=discovery.broadcast, args=(network_discover_running, socket.gethostname()))
+listener_thread  = threading.Thread(target=discovery.listener, args=(connect_queue, is_running, socket.gethostname()))
+broadcast_thread = threading.Thread(target=discovery.broadcast, args=(discovery_broadcast_running, socket.gethostname()))
 
 p = pyaudio.PyAudio()
 
@@ -64,6 +62,7 @@ socket_ip = "127.0.0.1"
 socket_port = 9000
 
 input_thread.start()
+listener_thread.start()
 
 audio_listening = False
 audio_play = True
@@ -97,7 +96,7 @@ while True:
         socket_port = int(command[2])
       print("Serving to",socket_ip,":",socket_port)
       socket_mode = 1
-      start_discovery()
+      start_discovery_broadcast()
     elif (command[0] == "connect"):
       audio_listening = True
       audio_play = True
@@ -112,7 +111,7 @@ while True:
       audio_listening = False
       socket_mode = 0
       sock.close()
-      stop_discovery()
+      stop_discovery_broadcast()
     elif (command[0] == "info"):
       print("Audio listening") if (audio_listening) else print("Audio not listening")
       print("Audio muted") if (not audio_play) else print("Audio not muted")
@@ -143,5 +142,6 @@ stream.close()
 
 p.terminate()
 
-stop_discovery()
+stop_discovery_broadcast()
 input_thread.join()
+listener_thread.join()

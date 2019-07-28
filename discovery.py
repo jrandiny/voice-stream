@@ -6,6 +6,9 @@ DISCOVERY_PORT = 56789
 DISCOVERY_TYPE = "vs-discover"
 DISCOVERY_VERSION = 1
 
+COMM_PORT = 45678
+
+peer_list = {}
 
 def listener(command_queue, run_loop, name):
   listener_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -18,7 +21,11 @@ def listener(command_queue, run_loop, name):
       if (json_data["type"] == DISCOVERY_TYPE
           and json_data["version"] == DISCOVERY_VERSION
           and json_data["name"] != name):
-        print("discover ", json_data["name"])
+        print("discover {} on {}:{}".format(json_data["name"],addr[0],json_data["port"]))
+        if (json_data["name"] not in peer_list):
+          print("new peer")
+          peer_list[json_data["name"]] = (addr[0], json_data["port"])
+        print(peer_list)
     except socket.error:
       pass
     except json.decoder.JSONDecodeError:
@@ -34,6 +41,7 @@ def broadcast(run_loop, name):
     data["version"] = DISCOVERY_VERSION
     data["name"] = name
     data["time"] = int(time.time())
+    data["port"] = COMM_PORT
     broadcast_socket.sendto(
         json.dumps(data).encode(), ('<broadcast>', DISCOVERY_PORT))
     time.sleep(2)
