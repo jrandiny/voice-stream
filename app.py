@@ -78,6 +78,7 @@ while True:
     if (socket_mode == 1):
       data = stream.read(CHUNK)
       for addr in connection_list:
+        print(addr)
         sock.sendto(data, addr)
     elif (socket_mode == 2):
       try:
@@ -90,7 +91,8 @@ while True:
   if (not connect_queue.empty()):
     addr = connect_queue.get()
     print(addr)
-    connection_list.append(addr)
+    if(addr not in connection_list):
+      connection_list.append(addr)
     connect_queue.task_done()
 
   if (not command_queue.empty()):
@@ -133,7 +135,6 @@ while True:
     elif (command[0] == "stop"):
       audio_listening = False
       socket_mode = 0
-      sock.close()
       stop_discovery_broadcast()
       connection_list = []
     elif (command[0] == "info"):
@@ -144,9 +145,6 @@ while True:
       audio_play = False
     elif (command[0] == "unmute"):
       audio_play = True
-    elif (command[0] == "debug"):
-      socaaa = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-      socaaa.sendto("hahaha".encode(),("192.168.43.102",9000))
     else:
       print("Command")
       print("exit                - Exit app")
