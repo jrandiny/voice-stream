@@ -3,6 +3,7 @@ import pyaudio
 import socket
 import threading
 import sys
+import time
 
 from config import *
 from util import gen_payload
@@ -10,29 +11,30 @@ import command
 import discovery
 
 def start_discovery_broadcast():
+  discovery_listener_running.clear()
+  time.sleep(2)
   discovery_broadcast_running.set()
-  broadcast_thread.start()
-  connect_thread.start()
 
 def stop_discovery_broadcast():
-  if(discovery_broadcast_running.isSet()):
-    discovery_broadcast_running.clear()
-    broadcast_thread.join()
-    connect_thread.join()
+  discovery_broadcast_running.clear()
+  time.sleep(2)
+  discovery_listener_running.set()
 
 command_queue = Queue()
 connect_queue = Queue()
 
 is_running = threading.Event()
+discovery_listener_running = threading.Event()
 discovery_broadcast_running = threading.Event()
 
 is_running.set()
+discovery_listener_running.set()
 discovery_broadcast_running.clear()
 
 input_thread = threading.Thread(target=command.worker, args=(command_queue, is_running ))
-listener_thread  = threading.Thread(target=discovery.listener, args=(is_running, socket.gethostname()))
-broadcast_thread = threading.Thread(target=discovery.broadcast, args=(discovery_broadcast_running, socket.gethostname()))
-connect_thread = threading.Thread(target=discovery.connect, args=(connect_queue,discovery_broadcast_running))
+listener_thread  = threading.Thread(target=discovery.listener, args=(is_running, discovery_listener_running, socket.gethostname()))
+broadcast_thread = threading.Thread(target=discovery.broadcast, args=(is_running, discovery_broadcast_running, socket.gethostname()))
+connect_thread = threading.Thread(target=discovery.connect, args=(connect_queue,is_running, discovery_broadcast_running))
 
 p = pyaudio.PyAudio()
 
@@ -68,6 +70,8 @@ socket_port = 9000
 
 input_thread.start()
 listener_thread.start()
+broadcast_thread.start()
+connect_thread.start()
 
 audio_listening = False
 audio_play = True
@@ -88,11 +92,14 @@ while True:
       except socket.error:
         pass
 
+  if (not connect_queue.empty()):
+    print(connect_queue.get())
+    connect_queue.task_done()
+
   if (not command_queue.empty()):
     command = command_queue.get().split(" ")
 
     if (command[0] == "exit"):
-      is_running.clear()
       command_queue.task_done()
       break
     elif (command[0] == "serve"):
@@ -154,6 +161,9 @@ while True:
     command_queue.task_done()
 
 print("Exiting")
+
+is_running.clear()
+discovery_listener_running.clear()
 
 sock.close()
 
