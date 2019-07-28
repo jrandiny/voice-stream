@@ -67,26 +67,30 @@ input_thread.start()
 listener_thread.start()
 broadcast_thread.start()
 
-audio_listening = False
-audio_play = True
-socket_mode = 0
+# audio_listening = False
+# socket_mode = 0
+
+sending_audio = False
+receiving_audio = False
+play_audio = True
+
 
 connection_list = []
 
 while True:
-  if (audio_listening):
-    if (socket_mode == 1):
-      data = stream.read(CHUNK)
-      for addr in connection_list:
-        print(addr)
-        sock.sendto(data, addr)
-    elif (socket_mode == 2):
-      try:
-        data, addr = sock.recvfrom(CHUNK * 4)
-        if (audio_play):
-          stream.write(data, CHUNK)
-      except socket.error:
-        pass
+  if(sending_audio):
+    data = stream.read(CHUNK)
+    for addr in connection_list:
+      print(addr)
+      sock.sendto(data, addr)
+
+  if(receiving_audio):
+    try:
+      data, addr = sock.recvfrom(CHUNK * 4)
+      if (play_audio):
+        stream.write(data, CHUNK)
+    except socket.error:
+      pass
 
   if (not connect_queue.empty()):
     addr = connect_queue.get()
@@ -102,9 +106,9 @@ while True:
       command_queue.task_done()
       break
     elif (command[0] == "serve"):
-      audio_listening = True
-      audio_play = False
-      socket_mode = 1
+      play_audio = False
+      sending_audio = True
+      receiving_audio = True
       start_discovery_broadcast()
     elif (command[0] == "connect"):
       if(len(command)>=3):
@@ -122,29 +126,31 @@ while True:
 
         socket_ip = discovery.discovered_list[hostname][0]
         socket_port = discovery.discovered_list[hostname][1]
-      
-      audio_listening = True
-      audio_play = True
-      socket_mode = 2
+
+      play_audio = True
+      sending_audio = True
+      receiving_audio = True
       print("Connecting to {}:{}".format(socket_ip, socket_port))  
       connect_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
       connect_socket.sendto(gen_payload(CONNECT_SOCK,socket.gethostname()).encode(),(socket_ip, CONNECT_SOCK["PORT"]))
       connect_socket.close()
+      if((socket_ip, socket_port) not in connection_list):
+        connection_list.append((socket_ip, socket_port))
       sock.bind(("",COMM_PORT))
       sock.setblocking(False)
     elif (command[0] == "stop"):
-      audio_listening = False
-      socket_mode = 0
+      sending_audio = False
+      receiving_audio = False
       stop_discovery_broadcast()
       connection_list = []
     elif (command[0] == "info"):
       print("Audio listening") if (audio_listening) else print("Audio not listening")
-      print("Audio muted") if (not audio_play) else print("Audio not muted")
+      print("Audio muted") if (not play_audio) else print("Audio not muted")
       print(HELP_STATUS_TEXT[socket_mode])
     elif (command[0] == "mute"):
-      audio_play = False
+      play_audio = False
     elif (command[0] == "unmute"):
-      audio_play = True
+      play_audio = True
     else:
       print("Command")
       print("exit                - Exit app")
