@@ -1,13 +1,15 @@
-DISCOVERY_SOCK = {
-  "PORT":56789,
-  "TYPE":"vs-discover",
-  "VERSION":1
-}
+import socket
 
-CONNECT_SOCK = {
-  "PORT": DISCOVERY_SOCK["PORT"],
-  "TYPE": "vs-connect",
-  "VERSION":1
-}
+SIGNALING_CONNECT = "vs-connect"
+SIGNALING_DISCOVER = "vs-discover"
+
+SIGNALING_PORT = 56789
+SIGNALING_VERSION = 1
+SIGNALING_NAME = socket.gethostname()
 
 COMM_PORT = 45678
+
+CHUNK = 1024
+WIDTH = 2
+CHANNELS = 2
+RATE = 44100
