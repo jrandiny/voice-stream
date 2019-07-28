@@ -10,12 +10,6 @@ from util import gen_payload
 import command
 import discovery
 
-def start_discovery_broadcast():
-  discovery_broadcast_running.set()
-
-def stop_discovery_broadcast():
-  discovery_broadcast_running.clear()
-
 command_queue = Queue()
 connect_queue = Queue()
 
@@ -59,9 +53,11 @@ stream = p.open(format=p.get_format_from_width(WIDTH),
                 input_device_index=chosen_device_index,
                 frames_per_buffer=CHUNK)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(("",COMM_PORT))
+sock.setblocking(False)
 
 socket_ip = "127.0.0.1"
-socket_port = 9000
+socket_port = 56789
 
 input_thread.start()
 listener_thread.start()
@@ -81,7 +77,6 @@ while True:
   if(sending_audio):
     data = stream.read(CHUNK)
     for addr in connection_list:
-      print(addr)
       sock.sendto(data, addr)
 
   if(receiving_audio):
@@ -94,7 +89,6 @@ while True:
 
   if (not connect_queue.empty()):
     addr = connect_queue.get()
-    print(addr)
     if(addr not in connection_list):
       connection_list.append(addr)
     connect_queue.task_done()
@@ -103,13 +97,12 @@ while True:
     command = command_queue.get().split(" ")
 
     if (command[0] == "exit"):
-      command_queue.task_done()
       break
     elif (command[0] == "serve"):
       play_audio = False
       sending_audio = True
       receiving_audio = True
-      start_discovery_broadcast()
+      discovery_broadcast_running.set()
     elif (command[0] == "connect"):
       if(len(command)>=3):
         socket_ip = command[1]
@@ -136,17 +129,16 @@ while True:
       connect_socket.close()
       if((socket_ip, socket_port) not in connection_list):
         connection_list.append((socket_ip, socket_port))
-      sock.bind(("",COMM_PORT))
-      sock.setblocking(False)
     elif (command[0] == "stop"):
       sending_audio = False
       receiving_audio = False
-      stop_discovery_broadcast()
+      discovery_broadcast_running.clear()
       connection_list = []
     elif (command[0] == "info"):
-      print("Audio listening") if (audio_listening) else print("Audio not listening")
-      print("Audio muted") if (not play_audio) else print("Audio not muted")
-      print(HELP_STATUS_TEXT[socket_mode])
+      pass
+      # print("Audio listening") if (audio_listening) else print("Audio not listening")
+      # print("Audio muted") if (not play_audio) else print("Audio not muted")
+      # print(HELP_STATUS_TEXT[socket_mode])
     elif (command[0] == "mute"):
       play_audio = False
     elif (command[0] == "unmute"):
@@ -169,6 +161,9 @@ print("Exiting")
 
 is_running.clear()
 discovery_listener_running.clear()
+discovery_broadcast_running.clear()
+
+command_queue.task_done()
 
 sock.close()
 
@@ -177,6 +172,11 @@ stream.close()
 
 p.terminate()
 
-stop_discovery_broadcast()
+print('a')
+broadcast_thread.join()
+print('a')
+
 input_thread.join()
+print('a')
+
 listener_thread.join()
