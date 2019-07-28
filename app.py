@@ -4,17 +4,21 @@ import socket
 import threading
 import sys
 
+from config import *
+from util import gen_payload
 import command
 import discovery
 
 def start_discovery_broadcast():
   discovery_broadcast_running.set()
   broadcast_thread.start()
+  connect_thread.start()
 
 def stop_discovery_broadcast():
   if(discovery_broadcast_running.isSet()):
     discovery_broadcast_running.clear()
     broadcast_thread.join()
+    connect_thread.join()
 
 command_queue = Queue()
 connect_queue = Queue()
@@ -26,8 +30,9 @@ is_running.set()
 discovery_broadcast_running.clear()
 
 input_thread = threading.Thread(target=command.worker, args=(command_queue, is_running ))
-listener_thread  = threading.Thread(target=discovery.listener, args=(connect_queue, is_running, socket.gethostname()))
+listener_thread  = threading.Thread(target=discovery.listener, args=(is_running, socket.gethostname()))
 broadcast_thread = threading.Thread(target=discovery.broadcast, args=(discovery_broadcast_running, socket.gethostname()))
+connect_thread = threading.Thread(target=discovery.connect, args=(connect_queue,discovery_broadcast_running))
 
 p = pyaudio.PyAudio()
 
@@ -68,6 +73,8 @@ audio_listening = False
 audio_play = True
 socket_mode = 0
 
+connection_list = []
+
 while True:
   if (audio_listening):
     if (socket_mode == 1):
@@ -91,21 +98,33 @@ while True:
     elif (command[0] == "serve"):
       audio_listening = True
       audio_play = False
-      if(len(command)>=3):
-        socket_ip = command[1]
-        socket_port = int(command[2])
-      print("Serving to",socket_ip,":",socket_port)
       socket_mode = 1
       start_discovery_broadcast()
     elif (command[0] == "connect"):
-      audio_listening = True
-      audio_play = True
-      socket_mode = 2
       if(len(command)>=3):
         socket_ip = command[1]
         socket_port = int(command[2])
-      print("Connecting to",socket_ip,":",socket_port)  
-      sock.bind((socket_ip,socket_port))
+      else:
+        print("Discovered server:")
+        for name,addr in discovery.discovered_list.items():
+          print("{} on {}:{}".format(name,addr[0],addr[1]))
+
+        hostname = ""
+
+        while (hostname not in discovery.discovered_list):
+          hostname = input("Hostname : ")
+
+        socket_ip = discovery.discovered_list[hostname][0]
+        socket_port = discovery.discovered_list[hostname][1]
+      
+      audio_listening = True
+      audio_play = True
+      socket_mode = 2
+      print("Connecting to {}:{}".format(socket_ip, socket_port))  
+      connect_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+      connect_socket.sendto(gen_payload(CONNECT_SOCK,socket.gethostname()).encode(),(socket_ip, socket_port))
+      connect_socket.close()
+      sock.bind(("127.0.0.1",COMM_PORT))
       sock.setblocking(False)
     elif (command[0] == "stop"):
       audio_listening = False
@@ -123,8 +142,9 @@ while True:
     else:
       print("Command")
       print("exit                - Exit app")
-      print("serve <ip> <port>   - Start server (defaults to localhost 9000)")
-      print("connect <ip> <port> - Connect to (defaults to localhost 9000)")
+      print("serve               - Start server")
+      print("connect             - Interactive connect (recommended)")
+      print("connect <ip> <port> - Connect to specific ip port")
       print("stop                - Stop connection")
       print("mute                - Mute other party")
       print("listen              - Unmute other party")
