@@ -1,7 +1,5 @@
-def worker(command_queue):
-  while (True):
-    command_queue.join()
+def worker(command_queue, run_loop):
+  while (run_loop.is_set()):
     command = input("> ")
     command_queue.put(command)
-    if(command == 'exit'):
-      break
+    command_queue.join()

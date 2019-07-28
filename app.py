@@ -5,9 +5,31 @@ import threading
 import sys
 
 import command
+import discovery
+
+def start_discovery():
+  network_discover_running.set()
+  listener_thread.start()
+  broadcast_thread.start()
+
+def stop_discovery():
+  if(network_discover_running.is_set()):
+    network_discover_running.clear()
+    listener_thread.join()
+    broadcast_thread.join()
 
 command_queue = Queue()
-input_thread = threading.Thread(target=command.worker, args=(command_queue, ))
+connect_queue = Queue()
+
+is_running = threading.Event()
+network_discover_running = threading.Event()
+
+is_running.set()
+network_discover_running.clear()
+
+input_thread = threading.Thread(target=command.worker, args=(command_queue, is_running ))
+listener_thread  = threading.Thread(target=discovery.listener, args=(connect_queue, network_discover_running, socket.gethostname()))
+broadcast_thread = threading.Thread(target=discovery.broadcast, args=(network_discover_running, socket.gethostname()))
 
 p = pyaudio.PyAudio()
 
@@ -64,6 +86,7 @@ while True:
     command = command_queue.get().split(" ")
 
     if (command[0] == "exit"):
+      is_running.clear()
       command_queue.task_done()
       break
     elif (command[0] == "serve"):
@@ -74,6 +97,7 @@ while True:
         socket_port = int(command[2])
       print("Serving to",socket_ip,":",socket_port)
       socket_mode = 1
+      start_discovery()
     elif (command[0] == "connect"):
       audio_listening = True
       audio_play = True
@@ -88,6 +112,7 @@ while True:
       audio_listening = False
       socket_mode = 0
       sock.close()
+      stop_discovery()
     elif (command[0] == "info"):
       print("Audio listening") if (audio_listening) else print("Audio not listening")
       print("Audio muted") if (not audio_play) else print("Audio not muted")
@@ -118,4 +143,5 @@ stream.close()
 
 p.terminate()
 
+stop_discovery()
 input_thread.join()
